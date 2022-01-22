@@ -1,0 +1,505 @@
+---
+title: "COVID-19 CEDEAO"
+author: "A. ZAKARI"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    social: menu
+runtime: shiny
+---
+
+```{r global, include=FALSE}
+#------------------ Packages ------------------
+library(flexdashboard)
+library(data.table)
+require(ggplot2)
+require(ggthemes)
+require(maptools)
+require(plotly)
+library(knitr)
+library(kableExtra)
+require(incidence)
+require(projections)
+require(distcrete)
+require(epitrix)
+require(tidyr)
+require(dplyr)
+
+#---Traitement des donnees-------------------------------
+Infection = fread("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_global.csv")
+
+gueri = fread("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_recovered_global.csv")
+
+Deces = fread("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_global.csv")
+
+
+### Guérison
+
+# Nouveaux par pays
+## Infections
+N = ncol(Infection)
+d.confirmed = matrix(nrow = nrow(Infection), ncol = N-5)
+for(i in 1:nrow(Infection)) d.confirmed[i, ] = diff(as.numeric(Infection[i,5:N]))
+d.confirmed = data.frame(Infection$`Province/State`, Infection$`Country/Region`, Infection$Lat,
+                         Infection$Lat, d.confirmed)
+
+colnames(d.confirmed) = colnames(Infection)[c(1:4,6:N)]
+d.confirmed = data.table(d.confirmed)
+d.confirmed = melt(d.confirmed, id.vars = c("Country/Region", "Province/State", "Lat", "Long"),
+                 measure.vars = 5:N-1, value.name = "Cases")
+d.confirmed[, Case_Type := "Difference"]
+d.confirmed[,date := as.Date(variable, "%m/%d/%y") ][order(`Country/Region`)]
+d.confirmed = d.confirmed[, .(Case_Type, Cases, Country_Region = `Country/Region` , 
+                          Province_State = `Province/State`, Lat, Long, date)]
+d.confirmed = d.confirmed[!is.na(date)]
+
+## Corrections liées à la non actualisation des données dans les bases en ligne
+### Nouveaux cas
+
+d.confirmed[Country_Region == "Niger" & date == as.Date("2020-03-31")]$Cases = 7
+d.confirmed[Country_Region == "Niger" & date == as.Date("2020-04-01")]$Cases = 40
+d.confirmed[Country_Region == "Niger" & date == as.Date("2020-04-13")]$Cases = 19
+d.confirmed[Country_Region == "Niger" & date == as.Date("2020-04-14")]$Cases = 22
+d.confirmed[Country_Region == "Niger" & date == as.Date("2020-04-16")]$Cases = 25
+d.confirmed[Country_Region == "Niger" & date == as.Date("2020-04-17")]$Cases = 18
+d.confirmed[Country_Region == "Niger" & date == as.Date("2020-04-20")]$Cases = 7
+d.confirmed[Country_Region == "Niger" & date == as.Date("2020-04-21")]$Cases = 2
+d.confirmed[Country_Region == "Niger" & date == as.Date("2020-05-27")]$Cases = 3
+d.confirmed[Country_Region == "Niger" & date == as.Date("2020-05-28")]$Cases = 0
+d.confirmed[Country_Region == "Niger" & date == as.Date("2020-06-19")]$Cases = 6
+d.confirmed[Country_Region == "Niger" & date == as.Date("2020-06-24")]$Cases = 5
+d.confirmed[Country_Region == "Niger" & date == as.Date("2020-06-25")]$Cases = 3
+d.confirmed[Country_Region == "Niger" & date == as.Date("2020-06-26")]$Cases = 3
+d.confirmed[Country_Region == "Niger" & date == as.Date("2020-06-27")]$Cases = 6
+d.confirmed[Country_Region == "Niger" & date == as.Date("2020-06-28")]$Cases = 6
+
+# Infections
+Infection = melt(Infection, id.vars = c("Country/Region", "Province/State", "Lat", "Long"),
+                 measure.vars = 5:N, value.name = "Cases")
+
+Infection[, Case_Type := "Confirmed"]
+Infection[,date := as.Date(variable, "%m/%d/%y") ][order(`Country/Region`)]
+Infection = Infection[, .(Case_Type, Cases, Country_Region = `Country/Region` , 
+                          Province_State = `Province/State`, Lat, Long, date)]
+
+## Corrections liées à la non actualisation des données dans les bases en ligne
+
+Infection[Country_Region == "Niger" & date == as.Date("2020-03-31")]$Cases = 34
+Infection[Country_Region == "Niger" & date == as.Date("2020-04-01")]$Cases = 74
+Infection[Country_Region == "Niger" & date == as.Date("2020-04-13")]$Cases = 548
+Infection[Country_Region == "Niger" & date == as.Date("2020-04-16")]$Cases = 609
+Infection[Country_Region == "Niger" & date == as.Date("2020-04-20")]$Cases = 655
+Infection[Country_Region == "Niger" & date == as.Date("2020-05-27")]$Cases = 955
+Infection[Country_Region == "Niger" & date == as.Date("2020-06-19")]$Cases = 1026
+Infection[Country_Region == "Niger" & date == as.Date("2020-06-24")]$Cases = 1056
+Infection[Country_Region == "Niger" & date == as.Date("2020-06-25")]$Cases = 1059
+Infection[Country_Region == "Niger" & date == as.Date("2020-06-26")]$Cases = 1062
+Infection[Country_Region == "Niger" & date == as.Date("2020-06-27")]$Cases = 1068
+
+
+###Guerisons
+gueri = melt(gueri, id.vars = c("Country/Region", "Province/State", "Lat", "Long"),
+                 measure.vars = 5:N, value.name = "Cases")
+
+gueri[, Case_Type := "Recovered"]
+gueri[,date := as.Date(variable, "%m/%d/%y") ][order(`Country/Region`)]
+gueri = gueri[, .(Case_Type, Cases, Country_Region = `Country/Region` , 
+                  Province_State = `Province/State`, Lat, Long, date)]
+
+gueri[Country_Region == "Niger" & date == as.Date("2020-04-11")]$Cases = 50
+gueri[Country_Region == "Niger" & date == as.Date("2020-04-13")]$Cases = 86
+gueri[Country_Region == "Niger" & date == as.Date("2020-04-15")]$Cases = 97
+gueri[Country_Region == "Niger" & date == as.Date("2020-04-16")]$Cases = 105
+gueri[Country_Region == "Niger" & date == as.Date("2020-04-16")]$Cases = 105
+gueri[Country_Region == "Niger" & date == as.Date("2020-05-27")]$Cases = 796
+gueri[Country_Region == "Niger" & date == as.Date("2020-06-19")]$Cases = 905
+gueri[Country_Region == "Niger" & date == as.Date("2020-06-24")]$Cases = 917
+gueri[Country_Region == "Niger" & date == as.Date("2020-06-25")]$Cases = 919
+gueri[Country_Region == "Niger" & date == as.Date("2020-06-26")]$Cases = 924
+gueri[Country_Region == "Niger" & date == as.Date("2020-07-01")]$Cases = 947
+
+###Deces
+Deces = melt(Deces, id.vars = c("Country/Region", "Province/State", "Lat", "Long"),
+             measure.vars = 5:N, value.name = "Cases")
+
+Deces[, Case_Type := "Deaths"]
+Deces[,date := as.Date(variable, "%m/%d/%y") ][order(`Country/Region`)]
+Deces = Deces[, .(Case_Type, Cases, Country_Region = `Country/Region` , 
+                 Province_State = `Province/State`, Lat, Long, date)]
+
+Deces[Country_Region == "Niger" & date == as.Date("2020-04-13")]$Cases = 13
+Deces[Country_Region == "Niger" & date == as.Date("2020-04-16")]$Cases = 15
+Deces[Country_Region == "Niger" & date == as.Date("2020-04-17")]$Cases = 18
+Deces[Country_Region == "Niger" & date == as.Date("2020-05-27")]$Cases = 64
+
+###Fusion
+coronavirus = funion(Infection, gueri)
+coronavirus = funion(coronavirus, Deces)
+
+`%>%` <- magrittr::`%>%`
+#------------------ Parameters ------------------
+# Set colors
+# https://www.w3.org/TR/css-color-3/#svg-color
+confirmed_color <- "purple"
+active_color <- "#1f77b4"
+recovered_color <- "forestgreen"
+death_color <- "red"
+
+```
+
+Sidebar {.sidebar}
+=======================================================================
+
+### Sélectionner un pays de la  zone (CEDEAO ou UEMOA)
+
+Choisir un pays ou une zone (CEDEAO/UEMOA) pour connaitre comment la pandémie y a évolué COVID-19 
+
+```{r}
+# Selection des entrées
+selectInput("pays.selection", label = "Pays:",
+            choices = c("Burkina Faso", "Benin", "Cote d'Ivoire","Cabo Verde" ,"Gambia", "Ghana", "Guinea", "Guinea-Bissau",
+                                   "Liberia", "Mali", "Niger", "Nigeria", "Sierra Leone", "Senegal", "Togo", "CEDEAO"), selected = "Niger")
+
+```
+
+```{r importation des donne}
+
+#------------------ Data ------------------
+df <- coronavirus %>%
+  dplyr::filter(date == max(date)) %>%
+  dplyr::filter(Country_Region == "Niger") %>%
+  tidyr::pivot_wider(
+    names_from = Case_Type,
+    values_from = Cases
+  )
+
+
+CEDEAO <- coronavirus %>%
+  dplyr::filter(Country_Region %in% c("Burkina Faso", "Benin", "Cote d'Ivoire","Cabo Verde" ,"Gambia", "Ghana", "Guinea", "Guinea-Bissau",
+                                   "Liberia", "Mali", "Niger", "Nigeria", "Sierra Leone", "Senegal", "Togo") )
+
+CEDEAO = setDT(CEDEAO)
+CEDEAO = CEDEAO[, .(Country_Region = "CEDEAO", Cases = sum(Cases, na.rm = T), Province_State = "", Lat = mean(Lat), Long = mean(Long)), 
+                by = .(Case_Type, date)]
+
+coronavirus = rbind(coronavirus, CEDEAO[,.(Case_Type, Cases, Country_Region, Province_State, Lat, Long, date)])
+
+```
+
+
+CEDEAO
+=======================================================================
+
+Row
+-----------------------------------------------------------------------
+
+### confirmed {.value-box}
+
+```{r}
+
+# Emit the download rate
+renderValueBox({
+ 
+   df <- coronavirus %>%
+  dplyr::filter(date == max(date)) %>%
+  dplyr::filter(Country_Region == input$pays.selection) %>%
+  tidyr::pivot_wider(
+    names_from = Case_Type,
+    values_from = Cases
+  )
+  
+valueBox(
+  value = paste(format(sum(df$Confirmed, na.rm = T), big.mark = ","), "", sep = " "),
+  caption = "Nombre total de cas confirmés",
+  icon = "fas fa-user-md",
+  color = confirmed_color
+)
+})
+```
+
+### death {.value-box}
+
+```{r}
+
+renderValueBox({
+ 
+   df <- coronavirus %>%
+  dplyr::filter(date == max(date)) %>%
+  dplyr::filter(Country_Region == input$pays.selection) %>%
+  tidyr::pivot_wider(
+    names_from = Case_Type,
+    values_from = Cases
+  )
+  
+valueBox(
+  value = paste(format(sum(df$Deaths, na.rm = TRUE), big.mark = ","), " (",
+    round(100 * sum(df$Deaths, na.rm = TRUE) / sum(df$Confirmed, na.rm = T), 1),
+    "%)",
+    sep = ""
+  ),
+  caption = "Nombre de décès (Taux de létalité)",
+  icon = "fas fa-heart-broken",
+  color = death_color
+)
+})
+
+
+```
+
+### recovered {.value-box}
+```{r}
+
+renderValueBox({
+ 
+   df <- coronavirus %>%
+  dplyr::filter(date == max(date)) %>%
+  dplyr::filter(Country_Region == input$pays.selection) %>%
+  tidyr::pivot_wider(
+    names_from = Case_Type,
+    values_from = Cases
+  )
+  
+valueBox(
+  value = paste(format(sum(df$Recovered), big.mark = ","), " (",
+    round(100* sum(df$Recovered) / sum(df$Confirmed, na.rm = T), 1),
+    "%)",
+    sep = ""
+  ),
+  caption = "Guerison (Taux de Guerison)",
+  icon = "fas fa-heart-broken",
+  color = recovered_color
+)
+})
+
+```
+
+
+### active {.value-box}
+
+```{r}
+renderValueBox({
+ 
+   df <- coronavirus %>%
+  dplyr::filter(date == max(date)) %>%
+  dplyr::filter(Country_Region == input$pays.selection) %>%
+  tidyr::pivot_wider(
+    names_from = Case_Type,
+    values_from = Cases
+  )
+  
+valueBox(
+  value = paste(format(df$Confirmed - df$Recovered - df$Deaths, big.mark = ","), " (",
+    round(100* (df$Confirmed - df$Recovered - df$Deaths) / df$Confirmed, 1),
+    "%)",
+    sep = ""
+  ),
+  caption = "En traitement",
+  icon = "fas fa-heart-broken",
+  color = active_color
+)
+})
+```
+
+Row
+-----------------------------------------------------------------------
+
+### **Evolution de l'épidémie du COVID-19** 
+```{r}
+renderPlotly({
+
+  df_daily <- coronavirus %>%
+  dplyr::filter(Country_Region == input$pays.selection) %>%
+  dplyr::filter(date >= as.Date("2020-03-15")) %>%
+  dplyr::group_by(date, Case_Type) %>%
+  tidyr::pivot_wider(
+    names_from = Case_Type,
+    values_from = Cases
+  ) %>%
+  dplyr::arrange(date) %>%
+  dplyr::ungroup()%>%
+  dplyr::mutate(Active = Confirmed - Recovered - Deaths)
+  
+  plotly::plot_ly(data = df_daily) %>%
+  plotly::add_trace(
+    x = ~date,
+    # y = ~active_cum,
+    y = ~ Confirmed,
+    type = "scatter",
+    mode = "lines+markers",
+    # name = "Active",
+    name = "Déclarés positifs",
+    line = list(color = confirmed_color),
+    marker = list(color = confirmed_color)
+  ) %>%
+  plotly::add_trace(
+    x = ~date,
+    y = ~ Active,
+    type = "scatter",
+    mode = "lines+markers",
+    name = "Patients en traitement",
+    line = list(color = active_color),
+    marker = list(color = active_color)
+  ) %>%
+  plotly::add_trace(
+    x = ~date,
+    y = ~ Deaths,
+    type = "scatter",
+    mode = "lines+markers",
+    name = "Décès",
+    line = list(color = death_color),
+    marker = list(color = death_color)
+  ) %>%
+   plotly::add_trace(
+    x = ~date,
+    y = ~ Recovered,
+    type = "scatter",
+    mode = "lines+markers",
+    name = "Gueris",
+    line = list(color = recovered_color),
+    marker = list(color = recovered_color)
+  ) %>%
+     plotly::layout(
+    title =  paste0("<b> Pays: </b>", "<b>", input$pays.selection,"</b>") ,
+    yaxis = list(title = "Cas confirmés"),
+    xaxis = list(title = "Date"),
+    legend = list(x = 0.1, y = 0.9),
+    hovermode = "compare"
+  
+  )
+
+})
+
+```
+
+
+Prévisions
+=======================================================================
+
+Column {data-width=400}
+-------------------------------------
+
+### **Prévisions des nouveaux cas sur un horizon de 30 jours: la bande bleue représente l'intervalle de confiance à 95%**
+
+
+```{r traitement, echo=FALSE, message=FALSE}
+renderPlotly({
+### Données du Niger 
+ 
+cas.nouveau = d.confirmed[Country_Region == input$pays.selection & date > as.Date("2020-03-30")][order(date)]
+
+# 3. Modélisation log-linéaire
+
+incidence = cas.nouveau[, .(date, Cases)] %>% uncount(Cases)
+incidence_niger <- incidence(incidence$date)
+
+incidence_fit <- fit(incidence_niger, split = max(cas.nouveau$date)-20)
+
+#Modèle Gamma
+mu <- 7.5  # jours
+sigma <- 3.4  # jours
+param <- gamma_mucv2shapescale(mu, sigma/mu)
+
+w <- distcrete("gamma", interval = 1, shape = param$shape, scale = param$scale, 
+    w = 0)
+
+decay_R0 <- lm2R0_sample(incidence_fit$before$model, w)
+
+#4. Modéle GAMMA
+
+set.seed(2015)
+fin = length(cas.nouveau$Cases)
+pred_fwd_days <- 30
+date_range <- (which(get_dates(incidence_niger)== max(get_dates(incidence_niger)-20)):fin-4)
+
+test_pred_growth <- project(incidence_niger[date_range], 
+    R = median(decay_R0), si = w, n_days = pred_fwd_days, n_sim = 1000, R_fix_within = T)
+
+# convert the test_pred_growth matrix to a data frame and get
+# the median incidence for all the simulations for each date
+
+
+test_pred_growth_median_counts <- test_pred_growth %>% as.data.frame() %>% 
+    pivot_longer(-dates, names_to = "simulation", values_to = "incidence") %>% 
+    group_by(dates) %>% summarise(lower = quantile(incidence, 0.025),
+                                  upper = quantile(incidence, 0.975),
+                                  incident_cases = as.integer(median(incidence))) %>% 
+    mutate(data_type = "projection")
+
+
+
+prev = test_pred_growth_median_counts %>% bind_rows(tibble(dates = get_dates(incidence_niger), 
+    incident_cases = get_counts(incidence_niger), data_type = "observed")) %>% 
+    ggplot(aes(x = dates, y = incident_cases, colour = data_type)) +
+  geom_ribbon(aes(ymin = lower, ymax = upper), alpha=0.2, fill = "blue") +
+    geom_point(aes(text = paste0("<b> Type: </b>", data_type,"<br>",
+                                                    "<b> Date : </b>", dates,"<br>", 
+                                 "<b> Valeur: </b>", incident_cases,"<br>"))) + geom_line() + (incidence_niger) %>% add_incidence_fit(incidence_fit) + 
+    theme_light() + theme(legend.position = "bottom", legend.title = element_blank()) + xlab("Dates") + ylab("Nouveaux cas") 
+
+
+
+ggplotly(prev, tooltip = c("text"))
+})
+
+
+```
+
+
+### **Prévisions des nouveaux cas sur un horizon de 5 jours**
+
+```{r}
+renderTable({
+### Données du Niger 
+cas.nouveau = d.confirmed[Country_Region == input$pays.selection & date > as.Date("2020-03-30")][order(date)]
+
+# 3. Modélisation log-linéaire
+
+incidence = cas.nouveau[, .(date, Cases)] %>% uncount(Cases)
+incidence_niger <- incidence(incidence$date)
+
+incidence_fit <- fit(incidence_niger, split = max(cas.nouveau$date)-20)
+
+#Modèle Gamma
+mu <- 7.5  # jours
+sigma <- 3.4  # jours
+param <- gamma_mucv2shapescale(mu, sigma/mu)
+
+w <- distcrete("gamma", interval = 1, shape = param$shape, scale = param$scale, 
+    w = 0)
+
+decay_R0 <- lm2R0_sample(incidence_fit$before$model, w)
+
+#4. Modéle GAMMA
+
+set.seed(2015)
+fin = length(cas.nouveau$Cases)
+pred_fwd_days <- 30
+date_range <- (which(get_dates(incidence_niger)== max(get_dates(incidence_niger)-20)):fin)
+
+test_pred_growth <- project(incidence_niger[date_range], 
+    R = median(decay_R0), si = w, n_days = pred_fwd_days, n_sim = 1000, R_fix_within = T)
+
+# convert the test_pred_growth matrix to a data frame and get
+# the median incidence for all the simulations for each date
+
+
+test_pred_growth_median_counts <- test_pred_growth %>% as.data.frame() %>% 
+    pivot_longer(-dates, names_to = "simulation", values_to = "incidence") %>% 
+    group_by(dates) %>% summarise(lower = quantile(incidence, 0.025),
+                                  upper = quantile(incidence, 0.975),
+                                  incident_cases = as.integer(median(incidence))) %>% 
+    mutate(data_type = "projection")
+
+
+prevision5 = data.frame(Date = as.character(max(cas.nouveau$date)-3 + 1:30), 
+                         Prevision = test_pred_growth_median_counts$incident_cases, 
+                         "borne inf" = test_pred_growth_median_counts$lower,
+                         "borne Sup" = test_pred_growth_median_counts$upper)
+prevision5
+ 
+})
+```
+
+
+
+
