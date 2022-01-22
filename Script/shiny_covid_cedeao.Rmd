@@ -1,6 +1,6 @@
 ---
 title: "COVID-19 CEDEAO"
-author: "A. ZAKARI"
+author: "Abdoussalam ZAKARI"
 output: 
   flexdashboard::flex_dashboard:
     orientation: rows
